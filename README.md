@@ -1,6 +1,6 @@
 # Production Dashboard
 
-Live production dashboard for Ziath build tracking, driven from an Excel build plan and updated in real time via Socket.IO.
+Live production dashboard for the Ziath assembly cell, driven from our Excel build plan and updated in real time via Socket.IO. 
 
 ## Screenshot
 
@@ -10,10 +10,8 @@ Live production dashboard for Ziath build tracking, driven from an Excel build p
 
 - Real-time updates from Excel file changes
 - Workstation-based grouping and priority sorting
-- Work in Process and Completed sections
-- Optional overdue visibility toggle for WIP triage
 - Simulation mode for full-view display testing
-- WIP visual indicators (green dot + smooth pulsing header border)
+
 
 ## Tech Stack
 
@@ -61,7 +59,7 @@ The server watches the Excel file and emits live updates when changes are detect
 
 - queued refresh processing to avoid dropped rapid-save events
 - write-stability waiting for OneDrive-style save patterns
-- day-rollover refresh handling
+- day-rollover refresh 
 
 ## Repository
 
