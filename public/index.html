@@ -141,6 +141,16 @@
                 padding: 0.4rem 0.65rem;
             }
         }
+        /* Toolbar hover-reveal buttons */
+        .toolbar-btn {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        .toolbar:hover .toolbar-btn {
+            opacity: 1;
+            pointer-events: auto;
+        }
         /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
@@ -159,11 +169,11 @@
                 <p id="monthLabel" class="text-secondary font-bold text-xl mt-1"></p>
             </div>
             <div class="flex items-center gap-3">
-                <button id="simulationToggle" class="px-5 py-2.5 bg-gradient-to-r from-violet-700 to-purple-800 text-white rounded-lg font-bold hover:from-violet-600 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl">
+                <button id="simulationToggle" class="toolbar-btn px-5 py-2.5 bg-gradient-to-r from-violet-700 to-purple-800 text-white rounded-lg font-bold hover:from-violet-600 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl">
                     🧪 Simulate Full View
                 </button>
-                <button id="overdueToggle" class="px-5 py-2.5 bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-lg font-bold hover:from-slate-600 hover:to-slate-700 transition-all shadow-lg hover:shadow-xl">
-                    ⏭ Hide Overdue
+                <button id="overdueToggle" class="toolbar-btn px-5 py-2.5 bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-lg font-bold hover:from-slate-600 hover:to-slate-700 transition-all shadow-lg hover:shadow-xl">
+                    ⏭ Show Overdue
                 </button>
                 <div class="flex items-center gap-3 bg-gray-900 px-5 py-2.5 rounded-lg border border-gray-700 shadow-lg">
                     <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50"></div>
@@ -345,24 +355,24 @@
         function updateSimulationButton() {
             if (simulationMode) {
                 simulationToggle.innerHTML = '📡 Actual Production';
-                simulationToggle.className = 'px-5 py-2.5 bg-gradient-to-r from-emerald-700 to-green-800 text-white rounded-lg font-bold hover:from-emerald-600 hover:to-green-700 transition-all shadow-lg hover:shadow-xl';
+                simulationToggle.className = 'toolbar-btn px-5 py-2.5 bg-gradient-to-r from-emerald-700 to-green-800 text-white rounded-lg font-bold hover:from-emerald-600 hover:to-green-700 transition-all shadow-lg hover:shadow-xl';
             } else {
                 simulationToggle.innerHTML = '🧪 Simulate Full View';
-                simulationToggle.className = 'px-5 py-2.5 bg-gradient-to-r from-violet-700 to-purple-800 text-white rounded-lg font-bold hover:from-violet-600 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl';
+                simulationToggle.className = 'toolbar-btn px-5 py-2.5 bg-gradient-to-r from-violet-700 to-purple-800 text-white rounded-lg font-bold hover:from-violet-600 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl';
             }
         }
 
         function updateOverdueButton() {
             if (showOverdueUnits) {
-                overdueToggle.innerHTML = '📅 Showing Overdue';
-                overdueToggle.className = 'px-5 py-2.5 bg-gradient-to-r from-amber-600 to-orange-700 text-white rounded-lg font-bold hover:from-amber-500 hover:to-orange-600 transition-all shadow-lg hover:shadow-xl';
+                overdueToggle.innerHTML = '📅 Hide Overdue';
+                overdueToggle.className = 'toolbar-btn px-5 py-2.5 bg-gradient-to-r from-amber-600 to-orange-700 text-white rounded-lg font-bold hover:from-amber-500 hover:to-orange-600 transition-all shadow-lg hover:shadow-xl';
                 filterModeBadgeWip.textContent = 'Incl. Overdue';
                 filterModeBadgeWip.className = 'text-sm px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-black uppercase tracking-wide';
                 filterModeBadgeCompleted.textContent = 'Today+';
                 filterModeBadgeCompleted.className = 'text-sm px-3 py-1 rounded-full bg-slate-200 text-slate-700 font-black uppercase tracking-wide';
             } else {
-                overdueToggle.innerHTML = '⏭ Hide Overdue';
-                overdueToggle.className = 'px-5 py-2.5 bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-lg font-bold hover:from-slate-600 hover:to-slate-700 transition-all shadow-lg hover:shadow-xl';
+                overdueToggle.innerHTML = '⏭ Show Overdue';
+                overdueToggle.className = 'toolbar-btn px-5 py-2.5 bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-lg font-bold hover:from-slate-600 hover:to-slate-700 transition-all shadow-lg hover:shadow-xl';
                 filterModeBadgeWip.textContent = 'Today+';
                 filterModeBadgeCompleted.textContent = 'Today+';
                 filterModeBadgeWip.className = 'text-sm px-3 py-1 rounded-full bg-slate-200 text-slate-700 font-black uppercase tracking-wide';
@@ -540,7 +550,7 @@
                         const rawStatus = (r['Status'] || '').toString().trim();
                         const normalizedStatus = rawStatus.toLowerCase();
                         const isNotStarted = isNotStartedStatus(normalizedStatus);
-                        const displayStatus = isNotStarted ? 'NOT STARTED' : 'WIP';
+                        const displayStatus = isNotStarted ? 'NOT STARTED' : 'IN PROGRESS';
                         const headerBorderClass = isNotStarted ? '' : 'wip-header-flash';
 
                         return `

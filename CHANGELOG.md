@@ -6,7 +6,7 @@ This project follows a Keep a Changelog style and uses dates for release trackin
 
 ---
 
-## [2026-04-02] — Dashboard docs + screenshot
+## [2026-04-02] ï¿½ Dashboard docs + screenshot
 
 ### Added
 - Dashboard screenshot added to `docs/images/dashboard-example.jpg`.
@@ -15,7 +15,7 @@ This project follows a Keep a Changelog style and uses dates for release trackin
 
 ---
 
-## [2026-04-02] — Dashboard reliability + UX updates
+## [2026-04-02] ï¿½ Dashboard reliability + UX updates
 
 ### Added
 - Simulation mode toggle to switch between live and synthetic full-page data.
@@ -49,7 +49,7 @@ This project follows a Keep a Changelog style and uses dates for release trackin
 
 ---
 
-## [2026-04-02] — Initial project creation
+## [2026-04-02] ï¿½ Initial project creation
 
 ### Added
 - `server.js`: Express + Socket.IO backend.
