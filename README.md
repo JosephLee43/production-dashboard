@@ -32,15 +32,15 @@ Live production dashboard for Ziath build tracking, driven from an Excel build p
 
 ## Setup
 
-```powershell
-Set-Location "c:\Users\jleemil\Downloads\production-dashboard"
+```bash
+git clone https://github.com/JosephLee43/production-dashboard.git
+cd production-dashboard
 npm install
 ```
 
 ## Run
 
-```powershell
-Set-Location "c:\Users\jleemil\Downloads\production-dashboard"
+```bash
 npm start
 ```
 
