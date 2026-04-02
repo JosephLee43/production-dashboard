@@ -2,6 +2,10 @@
 
 Live production dashboard for Ziath build tracking, driven from an Excel build plan and updated in real time via Socket.IO.
 
+## Screenshot
+
+![Dashboard Example](docs/images/dashboard-example.jpg)
+
 ## Features
 
 - Real-time updates from Excel file changes
