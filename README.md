@@ -1,0 +1,68 @@
+# Production Dashboard
+
+Live production dashboard for Ziath build tracking, driven from an Excel build plan and updated in real time via Socket.IO.
+
+## Features
+
+- Real-time updates from Excel file changes
+- Workstation-based grouping and priority sorting
+- Work in Process and Completed sections
+- Optional overdue visibility toggle for WIP triage
+- Simulation mode for full-view display testing
+- WIP visual indicators (green dot + smooth pulsing header border)
+
+## Tech Stack
+
+- Node.js + Express
+- Socket.IO
+- ExcelJS
+- Chokidar
+- Day.js
+- Frontend: vanilla JS + Tailwind CSS
+
+## Prerequisites
+
+- Node.js 18+
+- npm
+- Access to the configured Excel workbook path in `server.js`
+
+## Setup
+
+```powershell
+Set-Location "c:\Users\jleemil\Downloads\production-dashboard"
+npm install
+```
+
+## Run
+
+```powershell
+Set-Location "c:\Users\jleemil\Downloads\production-dashboard"
+npm start
+```
+
+Open:
+
+- `http://localhost:3000`
+
+## Configuration
+
+Main runtime config is in `server.js`:
+
+- `FILE_PATH`: absolute path to the production Excel workbook
+- `PORT`: dashboard server port
+
+## Auto-Update Behavior
+
+The server watches the Excel file and emits live updates when changes are detected. It includes:
+
+- queued refresh processing to avoid dropped rapid-save events
+- write-stability waiting for OneDrive-style save patterns
+- day-rollover refresh handling
+
+## Repository
+
+GitHub: `https://github.com/JosephLee43/production-dashboard`
+
+## Changelog
+
+See `CHANGELOG.md` for release notes and recent dashboard updates.
