@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ziath Production Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        body { 
+            background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+            color: #1e293b; 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            transition: background 0.3s ease, color 0.3s ease;
+        }
+        .card { 
+            background: #ffffff; 
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease;
+        }
+        .card:hover {
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+            border: 2px solid #e2e8f0;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            transition: all 0.2s ease;
+        }
+        .text-light { color: #1e293b; }
+        .text-secondary { color: #64748b; }
+        .toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 30;
+            backdrop-filter: blur(10px);
+            background: rgba(248, 250, 252, 0.85);
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+        }
+        .legend-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.7rem;
+            border-radius: 9999px;
+            font-weight: 800;
+            font-size: 0.85rem;
+            letter-spacing: 0.02em;
+            border: 1px solid #dbe5f3;
+            background: #ffffff;
+        }
+        .status-badge {
+            min-width: 128px;
+            text-align: center;
+            padding: 0.5rem 0.8rem;
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+            font-weight: 900;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+            white-space: nowrap;
+            margin-left: 0.5rem;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 2.2rem 1rem;
+            font-size: 1.4rem;
+            font-weight: 800;
+            border-radius: 0.9rem;
+            border: 1px dashed #cbd5e1;
+            background: rgba(255, 255, 255, 0.6);
+            color: #64748b;
+        }
+        :root {
+            --wip-accent-rgb: 34, 197, 94;
+        }
+        .wip-dot {
+            display: inline-block;
+            width: 0.5rem;
+            height: 0.5rem;
+            border-radius: 50%;
+            background-color: rgb(var(--wip-accent-rgb));
+            margin-left: 0.35rem;
+            vertical-align: middle;
+        }
+        @keyframes headerBorderFlash {
+            0%, 100% {
+                box-shadow: inset 0 -3px 0 rgba(var(--wip-accent-rgb), 0.10);
+            }
+            50% {
+                box-shadow: inset 0 -3px 0 rgba(var(--wip-accent-rgb), 0.70);
+            }
+        }
+        .wip-header-flash {
+            animation: headerBorderFlash 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+        .dashboard-shell {
+            height: calc(100vh - 1.5rem);
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .section-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.75rem;
+            flex: 1;
+            min-height: 0;
+        }
+        .section-panel {
+            background: rgba(255, 255, 255, 0.55);
+            border: 1px solid #dbe5f3;
+            border-radius: 0.9rem;
+            padding: 0.75rem 0.9rem;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .section-content {
+            min-height: 0;
+            overflow: auto;
+            padding-right: 0.25rem;
+        }
+        @media (min-width: 1280px) {
+            .section-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        @media (min-width: 1600px) and (min-height: 900px) {
+            .toolbar {
+                padding-top: 0.75rem;
+                padding-bottom: 0.75rem;
+            }
+            .status-badge {
+                min-width: 114px;
+                font-size: 0.85rem;
+                padding: 0.4rem 0.65rem;
+            }
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="p-3">
+    <div class="dashboard-shell max-w-[99%] mx-auto">
+        <div class="toolbar rounded-xl px-4 py-4 mb-5">
+        <div class="flex justify-between items-center gap-4">
+            <div>
+                <h1 class="text-5xl font-black tracking-tight text-light">
+                    Ziath <span class="text-purple-600">Dashboard</span>
+                </h1>
+                <p id="monthLabel" class="text-secondary font-bold text-xl mt-1"></p>
+            </div>
+            <div class="flex items-center gap-3">
+                <button id="simulationToggle" class="px-5 py-2.5 bg-gradient-to-r from-violet-700 to-purple-800 text-white rounded-lg font-bold hover:from-violet-600 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl">
+                    🧪 Simulate Full View
+                </button>
+                <button id="overdueToggle" class="px-5 py-2.5 bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-lg font-bold hover:from-slate-600 hover:to-slate-700 transition-all shadow-lg hover:shadow-xl">
+                    ⏭ Hide Overdue
+                </button>
+                <div class="flex items-center gap-3 bg-gray-900 px-5 py-2.5 rounded-lg border border-gray-700 shadow-lg">
+                    <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50"></div>
+                    <span id="syncTime" class="text-xl font-mono font-bold text-white">--:--:--</span>
+                </div>
+            </div>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
+            <span class="legend-chip text-blue-500"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>Work in Process</span>
+            <span class="legend-chip text-emerald-600"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>Completed</span>
+            <span class="legend-chip text-yellow-500"><span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>QC Wait</span>
+        </div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+            <div class="metric-card p-4 rounded-lg text-center">
+                <p class="text-gray-600 text-base font-black mb-2 uppercase tracking-wide">Scheduled Today</p>
+                <h2 id="totalScheduled" class="text-6xl font-black text-light">0</h2>
+            </div>
+            <div class="metric-card p-4 rounded-lg text-center">
+                <p class="text-emerald-600 text-base font-black mb-2 uppercase tracking-wide">Completed Today</p>
+                <h2 id="totalCompleted" class="text-6xl font-black text-emerald-600">0</h2>
+            </div>
+            <div class="metric-card p-4 rounded-lg text-center">
+                <p class="text-purple-600 text-base font-black mb-2 uppercase tracking-wide">Daily Completion</p>
+                <h2 id="completionPercentage" class="text-6xl font-black text-purple-600">0%</h2>
+            </div>
+        </div>
+
+        <div class="section-grid">
+        <div class="section-panel">
+            <h3 class="text-3xl font-black mb-3 text-blue-500 flex items-center gap-3">
+                <span class="w-2 h-10 bg-blue-500 rounded"></span>
+                Work in Process
+                <span id="filterModeBadgeWip" class="text-sm px-3 py-1 rounded-full bg-slate-200 text-slate-700 font-black uppercase tracking-wide">Today+</span>
+            </h3>
+            <div id="unitListPending" class="section-content space-y-3">
+                <div class="empty-state">Connecting to build plan...</div>
+            </div>
+        </div>
+
+        <div class="section-panel">
+            <h3 class="text-3xl font-black mb-3 text-emerald-600 flex items-center gap-3">
+                <span class="w-2 h-10 bg-emerald-600 rounded"></span>
+                Completed Today
+                <span id="filterModeBadgeCompleted" class="text-sm px-3 py-1 rounded-full bg-slate-200 text-slate-700 font-black uppercase tracking-wide">Today+</span>
+            </h3>
+            <div id="unitListCompleted" class="section-content space-y-3">
+                <div class="empty-state">No completed units yet</div>
+            </div>
+        </div>
+        </div>
+    </div>
+
+    <script>
+        const simulationToggle = document.getElementById('simulationToggle');
+        const overdueToggle = document.getElementById('overdueToggle');
+        const filterModeBadgeWip = document.getElementById('filterModeBadgeWip');
+        const filterModeBadgeCompleted = document.getElementById('filterModeBadgeCompleted');
+        const socket = io();
+        let latestActualData = null;
+        let simulationMode = false;
+        let showOverdueUnits = false;
+
+        const normalizeStatus = (row) => (row['Status'] || '').toString().toLowerCase().trim();
+        const isCompletedStatus = (status) => status === 'completed' || status === 'qc wait';
+        const isNotStartedStatus = (status) => [
+            '',
+            'not started',
+            'not started yet',
+            'not-started',
+            'planned',
+            'scheduled',
+            'tbd',
+            'to do',
+            'todo'
+        ].includes(status);
+        const getBuildDate = (row) => row['Planned Finish Date'] || row['Build Date'] || row['Date'] || row['Finish Date'];
+        const getPriority = (row) => row['Workstation Priority'] || row['Priority'] || '-';
+        const normalizeStationCode = (name) => {
+            const normalized = (name || '').toString().trim().toUpperCase();
+            if (normalized === 'ZTHWS1') return 'ZTSWS1';
+            return normalized;
+        };
+        const toIsoDateString = (value) => {
+            if (!value) return null;
+
+            if (value instanceof Date && !Number.isNaN(value.getTime())) {
+                return value.toISOString().slice(0, 10);
+            }
+
+            if (typeof value === 'number' && Number.isFinite(value)) {
+                const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+                const parsedDate = new Date(excelEpoch.getTime() + Math.round(value) * 86400000);
+                return parsedDate.toISOString().slice(0, 10);
+            }
+
+            const text = value.toString().trim();
+            const isoMatch = text.match(/\d{4}-\d{2}-\d{2}/);
+            if (isoMatch) return isoMatch[0];
+
+            const slashMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            if (slashMatch) {
+                const month = slashMatch[1].padStart(2, '0');
+                const day = slashMatch[2].padStart(2, '0');
+                const year = slashMatch[3];
+                return `${year}-${month}-${day}`;
+            }
+
+            const parsed = new Date(text);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed.toISOString().slice(0, 10);
+            }
+
+            return null;
+        };
+        const getIsoBuildDate = (row) => {
+            const buildDate = getBuildDate(row);
+            if (!buildDate) return null;
+            const isoDate = toIsoDateString(buildDate);
+            if (!isoDate) return null;
+            return isoDate;
+        };
+        const isScheduledForStandardWindow = (row, today) => {
+            const isoDate = getIsoBuildDate(row);
+            if (!isoDate) return false;
+            return isoDate >= today;
+        };
+        const isScheduledForWipWindow = (row, today) => {
+            const isoDate = getIsoBuildDate(row);
+            if (!isoDate) return false;
+            if (showOverdueUnits) {
+                return true;
+            }
+            return isoDate >= today;
+        };
+        const allowedWorkstationOrder = ['IXCWS1', 'IXCWS2', 'ZTSWS1', 'ZTSWS2', 'ZTSWS3'];
+
+        function getAllowedWorkstationsFromPlan(rows, limit = 5) {
+            return allowedWorkstationOrder.slice(0, limit);
+        }
+        const workstationPalette = [
+            '#a78bfa',
+            '#60a5fa',
+            '#34d399',
+            '#f59e0b',
+            '#f472b6',
+            '#22d3ee',
+            '#fb7185',
+            '#c084fc'
+        ];
+        const workstationColorOverrides = {
+            IXCWS1: '#ea580c',
+            IXCWS2: '#9b111e',
+            ZTSWS1: '#1e3a8a'
+        };
+
+        function getWorkstationColor(station) {
+            if (station === 'All Workstations') {
+                return '#a78bfa';
+            }
+
+            const stationText = (station || 'Unassigned').toString();
+            const normalizedStation = stationText.trim().toUpperCase();
+            if (workstationColorOverrides[normalizedStation]) {
+                return workstationColorOverrides[normalizedStation];
+            }
+
+            let hash = 0;
+            for (let i = 0; i < stationText.length; i++) {
+                hash = ((hash << 5) - hash) + stationText.charCodeAt(i);
+                hash |= 0;
+            }
+
+            const colorIndex = Math.abs(hash) % workstationPalette.length;
+            return workstationPalette[colorIndex];
+        }
+
+        function updateSimulationButton() {
+            if (simulationMode) {
+                simulationToggle.innerHTML = '📡 Actual Production';
+                simulationToggle.className = 'px-5 py-2.5 bg-gradient-to-r from-emerald-700 to-green-800 text-white rounded-lg font-bold hover:from-emerald-600 hover:to-green-700 transition-all shadow-lg hover:shadow-xl';
+            } else {
+                simulationToggle.innerHTML = '🧪 Simulate Full View';
+                simulationToggle.className = 'px-5 py-2.5 bg-gradient-to-r from-violet-700 to-purple-800 text-white rounded-lg font-bold hover:from-violet-600 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl';
+            }
+        }
+
+        function updateOverdueButton() {
+            if (showOverdueUnits) {
+                overdueToggle.innerHTML = '📅 Showing Overdue';
+                overdueToggle.className = 'px-5 py-2.5 bg-gradient-to-r from-amber-600 to-orange-700 text-white rounded-lg font-bold hover:from-amber-500 hover:to-orange-600 transition-all shadow-lg hover:shadow-xl';
+                filterModeBadgeWip.textContent = 'Incl. Overdue';
+                filterModeBadgeWip.className = 'text-sm px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-black uppercase tracking-wide';
+                filterModeBadgeCompleted.textContent = 'Today+';
+                filterModeBadgeCompleted.className = 'text-sm px-3 py-1 rounded-full bg-slate-200 text-slate-700 font-black uppercase tracking-wide';
+            } else {
+                overdueToggle.innerHTML = '⏭ Hide Overdue';
+                overdueToggle.className = 'px-5 py-2.5 bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-lg font-bold hover:from-slate-600 hover:to-slate-700 transition-all shadow-lg hover:shadow-xl';
+                filterModeBadgeWip.textContent = 'Today+';
+                filterModeBadgeCompleted.textContent = 'Today+';
+                filterModeBadgeWip.className = 'text-sm px-3 py-1 rounded-full bg-slate-200 text-slate-700 font-black uppercase tracking-wide';
+                filterModeBadgeCompleted.className = 'text-sm px-3 py-1 rounded-full bg-slate-200 text-slate-700 font-black uppercase tracking-wide';
+            }
+        }
+
+        function getCurrentMonthLabel() {
+            const now = new Date();
+            return now.toLocaleString('en-US', { month: 'long', year: 'numeric' }).replace(' ', '-');
+        }
+
+        function buildSimulatedData(actualData) {
+            const today = actualData?.serverToday || new Date().toISOString().split('T')[0];
+            const rows = [];
+            let workOrder = 900000;
+            const actualRows = actualData?.rows || [];
+            const stations = getAllowedWorkstationsFromPlan(actualRows, 5);
+
+            const uniquePlanItems = [...new Set(
+                actualRows
+                    .map(row => (row['Item'] || '').toString().trim())
+                    .filter(item => item && item !== '-')
+            )];
+
+            const dp5Items = uniquePlanItems.filter(item => item.toLowerCase().includes('dp5'));
+            const nonDp5Items = uniquePlanItems.filter(item => !item.toLowerCase().includes('dp5'));
+            const fallbackItems = [
+                'DP5-BASE UNIT',
+                'DP5-XL UNIT',
+                'DP5-COMPACT UNIT',
+                'STANDARD BUILD UNIT',
+                'PRODUCTION TEST UNIT'
+            ];
+
+            let dp5Index = 0;
+            let nonDp5Index = 0;
+            let fallbackIndex = 0;
+            let simulatedItemCounter = 0;
+
+            const getSimulatedItemName = () => {
+                simulatedItemCounter += 1;
+                const shouldUseDp5 = dp5Items.length > 0 && simulatedItemCounter % 3 === 0;
+
+                if (shouldUseDp5) {
+                    const itemName = dp5Items[dp5Index % dp5Items.length];
+                    dp5Index += 1;
+                    return itemName;
+                }
+
+                if (nonDp5Items.length > 0) {
+                    const itemName = nonDp5Items[nonDp5Index % nonDp5Items.length];
+                    nonDp5Index += 1;
+                    return itemName;
+                }
+
+                if (dp5Items.length > 0) {
+                    const itemName = dp5Items[dp5Index % dp5Items.length];
+                    dp5Index += 1;
+                    return itemName;
+                }
+
+                const itemName = fallbackItems[fallbackIndex % fallbackItems.length];
+                fallbackIndex += 1;
+                return itemName;
+            };
+
+            const stationPriority = {};
+            stations.forEach(station => {
+                stationPriority[station] = 1;
+            });
+
+            const addCategoryUnits = (prefix, count, statusFactory) => {
+                for (let i = 0; i < count; i++) {
+                    const station = stations[i % stations.length];
+                    rows.push({
+                        Workstation: station,
+                        'Workstation Priority': stationPriority[station]++,
+                        'Planned Finish Date': today,
+                        'Work Order': `${workOrder++}`,
+                        Item: getSimulatedItemName(),
+                        Status: statusFactory(i)
+                    });
+                }
+            };
+
+            addCategoryUnits('NS', 7, () => 'Not Started');
+            addCategoryUnits('WIP', 7, () => 'WIP');
+            addCategoryUnits('DONE', 6, (i) => (i % 4 === 0 ? 'QC Wait' : 'Completed'));
+
+            const groupedByStation = {};
+            rows.forEach(row => {
+                const station = row['Workstation'] || 'Unassigned';
+                if (!groupedByStation[station]) groupedByStation[station] = [];
+                groupedByStation[station].push(row);
+            });
+
+            Object.keys(groupedByStation).forEach(station => {
+                groupedByStation[station].sort((a, b) => {
+                    const priorityA = parseInt(a['Workstation Priority'] || a['Priority'] || 999, 10);
+                    const priorityB = parseInt(b['Workstation Priority'] || b['Priority'] || 999, 10);
+                    return priorityA - priorityB;
+                });
+            });
+
+            return {
+                month: actualData?.month || getCurrentMonthLabel(),
+                rows,
+                groupedByStation,
+                serverToday: today,
+                lastUpdated: `SIM ${new Date().toLocaleTimeString('en-GB', { hour12: false })}`
+            };
+        }
+
+        function renderDashboard(data) {
+            const today = data.serverToday;
+            const rows = data.rows || [];
+            const groupedByStation = data.groupedByStation || {};
+            const allowedWorkstations = getAllowedWorkstationsFromPlan(rows, 5);
+            const canonicalGroupedByStation = Object.entries(groupedByStation).reduce((acc, [rawStation, stationRows]) => {
+                const canonicalStation = normalizeStationCode(rawStation);
+                if (!canonicalStation || canonicalStation === 'NULL' || !Array.isArray(stationRows)) {
+                    return acc;
+                }
+                if (!acc[canonicalStation]) {
+                    acc[canonicalStation] = [];
+                }
+                acc[canonicalStation].push(...stationRows);
+                return acc;
+            }, {});
+            const stationDataSource = allowedWorkstations.reduce((acc, station) => {
+                const stationRows = canonicalGroupedByStation[normalizeStationCode(station)];
+                if (Array.isArray(stationRows) && stationRows.length > 0 && station && station !== 'null' && station !== '') {
+                    acc[station] = stationRows;
+                }
+                return acc;
+            }, {});
+
+            document.getElementById('monthLabel').innerText = simulationMode
+                ? `${data.month} • Simulated View`
+                : data.month;
+            document.getElementById('syncTime').innerText = data.lastUpdated;
+
+            // Calculate metrics - check multiple possible date column names
+            const todayScheduled = rows.filter(r => {
+                return isScheduledForWipWindow(r, today);
+            });
+            
+            const completed = todayScheduled.filter(r => {
+                const status = normalizeStatus(r);
+                return isCompletedStatus(status);
+            });
+            
+            const completionPercentage = todayScheduled.length > 0 
+                ? Math.round((completed.length / todayScheduled.length) * 100) 
+                : 0;
+
+            document.getElementById('totalScheduled').textContent = todayScheduled.length;
+            document.getElementById('totalCompleted').textContent = completed.length;
+            document.getElementById('completionPercentage').textContent = `${completionPercentage}%`;
+
+            // Render Work in Process (grouped by workstation)
+            const pendingHtml = Object.keys(stationDataSource)
+                .filter(station => station && station !== 'null')
+                .map(station => {
+                    const stationColor = getWorkstationColor(station);
+                    const stationItems = stationDataSource[station].filter(r => {
+                        const status = normalizeStatus(r);
+                        return isScheduledForWipWindow(r, today) && !isCompletedStatus(status);
+                    });
+
+                    if (stationItems.length === 0) return '';
+
+                    const cards = stationItems.map(r => {
+                        const rawStatus = (r['Status'] || '').toString().trim();
+                        const normalizedStatus = rawStatus.toLowerCase();
+                        const isNotStarted = isNotStartedStatus(normalizedStatus);
+                        const displayStatus = isNotStarted ? 'NOT STARTED' : 'WIP';
+                        const headerBorderClass = isNotStarted ? '' : 'wip-header-flash';
+
+                        return `
+                        <div class="card p-3 rounded-lg hover:shadow-xl transition-all border-l-4 ${headerBorderClass}" style="border-left-color: ${stationColor};">
+                            <div class="flex justify-between items-start mb-3">
+                                <div class="flex-1">
+                                    <h5 class="text-2xl font-black text-light mb-1 leading-tight">${r['Item'] || '-'}</h5>
+                                    <p class="text-lg text-secondary font-bold">WO: ${r['Work Order'] || '-'}</p>
+                                </div>
+                                <span class="status-badge bg-blue-500 text-white">
+                                    ${displayStatus}${isNotStarted ? '' : '<span class="wip-dot"></span>'}
+                                </span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 pt-3 border-t-2 border-gray-200">
+                                <div>
+                                    <p class="text-sm text-secondary font-bold mb-1">Priority</p>
+                                    <p class="text-2xl font-black" style="color: ${stationColor};">${getPriority(r)}</p>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-secondary font-bold mb-1">Build Date</p>
+                                    <p class="text-lg font-black text-light">${getBuildDate(r) || '-'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    }).join('');
+
+                    return `
+                        <div class="mb-4">
+                            <h4 class="text-2xl font-black mb-2 flex items-center gap-3" style="color: ${stationColor};">
+                                <span class="w-3 h-3 rounded-full" style="background-color: ${stationColor};"></span>
+                                ${station} <span class="text-xl text-secondary font-black">(${stationItems.length})</span>
+                            </h4>
+                            <div class="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+                                ${cards}
+                            </div>
+                        </div>
+                    `;
+                })
+                .filter(html => html)
+                .join('');
+
+            document.getElementById('unitListPending').innerHTML = pendingHtml || 
+                '<div class="empty-state">No work-in-process units for today</div>';
+
+            // Render Completed Today (grouped by workstation)
+            const completedHtml = Object.keys(stationDataSource)
+                .filter(station => station && station !== 'null')
+                .map(station => {
+                    const stationColor = getWorkstationColor(station);
+                    const stationItems = stationDataSource[station].filter(r => {
+                        const status = normalizeStatus(r);
+                        return isScheduledForStandardWindow(r, today) && isCompletedStatus(status);
+                    });
+
+                    if (stationItems.length === 0) return '';
+
+                    const cards = stationItems.map(r => {
+                        const status = (r['Status'] || '').toString().toLowerCase();
+                        const isQCWait = status === 'qc wait';
+                        return `
+                            <div class="card p-3 rounded-lg hover:shadow-xl transition-all border-l-4 border-emerald-600">
+                                <div class="flex justify-between items-start mb-3">
+                                    <div class="flex-1">
+                                        <h5 class="text-2xl font-black text-light mb-1 leading-tight">${r['Item'] || '-'}</h5>
+                                        <p class="text-lg text-secondary font-bold">WO: ${r['Work Order'] || '-'}</p>
+                                    </div>
+                                    <span class="status-badge ${isQCWait ? 'bg-yellow-500' : 'bg-emerald-600'} text-white">
+                                        ${isQCWait ? 'QC WAIT' : 'COMPLETED'}
+                                    </span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3 pt-3 border-t-2 border-gray-200">
+                                    <div>
+                                        <p class="text-sm text-secondary font-bold mb-1">Priority</p>
+                                        <p class="text-2xl font-black text-emerald-600">${getPriority(r)}</p>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm text-secondary font-bold mb-1">Build Date</p>
+                                        <p class="text-lg font-black text-light">${getBuildDate(r) || '-'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    return `
+                        <div class="mb-4">
+                            <h4 class="text-2xl font-black mb-2 flex items-center gap-3" style="color: ${stationColor};">
+                                <span class="w-3 h-3 rounded-full" style="background-color: ${stationColor};"></span>
+                                ${station} <span class="text-xl text-secondary font-black">(${stationItems.length})</span>
+                            </h4>
+                            <div class="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+                                ${cards}
+                            </div>
+                        </div>
+                    `;
+                })
+                .filter(html => html)
+                .join('');
+
+            document.getElementById('unitListCompleted').innerHTML = completedHtml || 
+                '<div class="empty-state">No completed units today</div>';
+        }
+
+        simulationToggle.addEventListener('click', () => {
+            simulationMode = !simulationMode;
+            updateSimulationButton();
+
+            if (simulationMode) {
+                const simulated = buildSimulatedData(latestActualData);
+                renderDashboard(simulated);
+                return;
+            }
+
+            if (latestActualData) {
+                renderDashboard(latestActualData);
+            } else {
+                document.getElementById('monthLabel').innerText = 'Waiting for production data...';
+            }
+        });
+
+        overdueToggle.addEventListener('click', () => {
+            showOverdueUnits = !showOverdueUnits;
+            updateOverdueButton();
+
+            if (simulationMode) {
+                renderDashboard(buildSimulatedData(latestActualData));
+                return;
+            }
+
+            if (latestActualData) {
+                renderDashboard(latestActualData);
+            }
+        });
+
+        socket.on('loading', (data) => {
+            if (simulationMode) return;
+            document.getElementById('unitListPending').innerHTML = `<div class="text-center py-12 text-secondary">${data.message}</div>`;
+            document.getElementById('unitListCompleted').innerHTML = `<div class="text-center py-12 text-secondary">Loading...</div>`;
+        });
+
+        socket.on('error', (data) => {
+            if (simulationMode) return;
+            document.getElementById('unitListPending').innerHTML = `<div class="text-center py-12 text-red-400">${data.message}</div>`;
+        });
+
+        socket.on('update', (data) => {
+            latestActualData = data;
+            if (simulationMode) {
+                renderDashboard(buildSimulatedData(latestActualData));
+                return;
+            }
+            renderDashboard(data);
+        });
+
+        updateSimulationButton();
+        updateOverdueButton();
+    </script>
+</body>
+</html>
