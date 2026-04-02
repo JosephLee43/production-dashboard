@@ -4,7 +4,7 @@ Live production dashboard for Ziath build tracking, driven from an Excel build p
 
 ## Screenshot
 
-![Dashboard Example](docs/images/dashboard-example.jpg)
+![Dashboard Example](docs/images/dashboard-example.png)
 
 ## Features
 
