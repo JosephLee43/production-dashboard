@@ -7,6 +7,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
         body { 
             background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
             color: #1e293b; 
@@ -25,9 +29,31 @@
         }
         .metric-card {
             background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-            border: 2px solid #e2e8f0;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+            border: 1px solid #dbe5f3;
+            box-shadow: 0 5px 14px rgba(15, 23, 42, 0.08);
             transition: all 0.2s ease;
+        }
+        .metric-label {
+            font-size: 0.78rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: none;
+            color: #475569;
+            margin-bottom: 0.2rem;
+        }
+        .metric-value {
+            font-size: 2.65rem;
+            line-height: 1;
+            font-weight: 900;
+        }
+        .metric-card-scheduled {
+            border-top: 3px solid #64748b;
+        }
+        .metric-card-completed {
+            border-top: 3px solid #059669;
+        }
+        .metric-card-completion {
+            border-top: 3px solid #7c3aed;
         }
         .text-light { color: #1e293b; }
         .text-secondary { color: #64748b; }
@@ -53,17 +79,17 @@
             background: #ffffff;
         }
         .status-badge {
-            min-width: 128px;
+            min-width: 112px;
             text-align: center;
-            padding: 0.5rem 0.8rem;
+            padding: 0.35rem 0.6rem;
             border-radius: 0.5rem;
-            font-size: 0.95rem;
+            font-size: 0.8rem;
             font-weight: 900;
             letter-spacing: 0.06em;
             text-transform: uppercase;
-            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
             white-space: nowrap;
-            margin-left: 0.5rem;
+            margin-left: 0.35rem;
         }
         .empty-state {
             text-align: center;
@@ -99,10 +125,10 @@
             animation: headerBorderFlash 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
         }
         .dashboard-shell {
-            height: calc(100vh - 1.5rem);
+            height: calc(100vh - 0.75rem);
             display: flex;
             flex-direction: column;
-            gap: 0.75rem;
+            gap: 0.5rem;
         }
         .section-grid {
             display: grid;
@@ -115,15 +141,33 @@
             background: rgba(255, 255, 255, 0.55);
             border: 1px solid #dbe5f3;
             border-radius: 0.9rem;
-            padding: 0.75rem 0.9rem;
+            padding: 0.55rem 0.7rem;
             min-height: 0;
             display: flex;
             flex-direction: column;
         }
         .section-content {
             min-height: 0;
-            overflow: auto;
-            padding-right: 0.25rem;
+            overflow: hidden;
+            padding-right: 0;
+        }
+        .station-group {
+            margin-bottom: 0.55rem;
+        }
+        .station-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.5rem;
+        }
+        @media (min-width: 1200px) {
+            .station-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+        @media (min-width: 1650px) {
+            .station-grid {
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+            }
         }
         @media (min-width: 1280px) {
             .section-grid {
@@ -132,13 +176,13 @@
         }
         @media (min-width: 1600px) and (min-height: 900px) {
             .toolbar {
-                padding-top: 0.75rem;
-                padding-bottom: 0.75rem;
+                padding-top: 0.55rem;
+                padding-bottom: 0.55rem;
             }
             .status-badge {
-                min-width: 114px;
-                font-size: 0.85rem;
-                padding: 0.4rem 0.65rem;
+                min-width: 104px;
+                font-size: 0.75rem;
+                padding: 0.3rem 0.5rem;
             }
         }
         /* Toolbar hover-reveal buttons */
@@ -158,15 +202,15 @@
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
 </head>
-<body class="p-3">
+<body class="p-2">
     <div class="dashboard-shell max-w-[99%] mx-auto">
-        <div class="toolbar rounded-xl px-4 py-4 mb-5">
+        <div class="toolbar rounded-xl px-4 py-3 mb-2">
         <div class="flex justify-between items-center gap-4">
             <div>
-                <h1 class="text-5xl font-black tracking-tight text-light">
+                <h1 class="text-4xl font-black tracking-tight text-light leading-none">
                     Ziath <span class="text-purple-600">Dashboard</span>
                 </h1>
-                <p id="monthLabel" class="text-secondary font-bold text-xl mt-1"></p>
+                <p id="monthLabel" class="text-secondary font-bold text-lg mt-1"></p>
             </div>
             <div class="flex items-center gap-3">
                 <button id="simulationToggle" class="toolbar-btn px-5 py-2.5 bg-gradient-to-r from-violet-700 to-purple-800 text-white rounded-lg font-bold hover:from-violet-600 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl">
@@ -175,38 +219,38 @@
                 <button id="overdueToggle" class="toolbar-btn px-5 py-2.5 bg-gradient-to-r from-slate-700 to-slate-800 text-white rounded-lg font-bold hover:from-slate-600 hover:to-slate-700 transition-all shadow-lg hover:shadow-xl">
                     ⏭ Show Overdue
                 </button>
-                <div class="flex items-center gap-3 bg-gray-900 px-5 py-2.5 rounded-lg border border-gray-700 shadow-lg">
+                <div class="flex items-center gap-2 bg-gray-900 px-4 py-2 rounded-lg border border-gray-700 shadow-lg">
                     <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50"></div>
-                    <span id="syncTime" class="text-xl font-mono font-bold text-white">--:--:--</span>
+                    <span id="syncTime" class="text-lg font-mono font-bold text-white">--:--:--</span>
                 </div>
             </div>
         </div>
-        <div class="mt-4 flex flex-wrap gap-2">
+        <div class="mt-2 flex flex-wrap gap-2">
             <span class="legend-chip text-blue-500"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span>Work in Process</span>
             <span class="legend-chip text-emerald-600"><span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>Completed</span>
             <span class="legend-chip text-yellow-500"><span class="w-2.5 h-2.5 rounded-full bg-yellow-500"></span>QC Wait</span>
         </div>
         </div>
 
-        <div class="grid grid-cols-3 gap-3">
-            <div class="metric-card p-4 rounded-lg text-center">
-                <p class="text-gray-600 text-base font-black mb-2 uppercase tracking-wide">Scheduled Today</p>
-                <h2 id="totalScheduled" class="text-6xl font-black text-light">0</h2>
+        <div class="grid grid-cols-3 gap-2">
+            <div class="metric-card metric-card-scheduled p-3 rounded-lg text-center">
+                <p class="metric-label">Scheduled Today</p>
+                <h2 id="totalScheduled" class="metric-value text-light">0</h2>
             </div>
-            <div class="metric-card p-4 rounded-lg text-center">
-                <p class="text-emerald-600 text-base font-black mb-2 uppercase tracking-wide">Completed Today</p>
-                <h2 id="totalCompleted" class="text-6xl font-black text-emerald-600">0</h2>
+            <div class="metric-card metric-card-completed p-3 rounded-lg text-center">
+                <p class="metric-label">Completed Today</p>
+                <h2 id="totalCompleted" class="metric-value text-emerald-600">0</h2>
             </div>
-            <div class="metric-card p-4 rounded-lg text-center">
-                <p class="text-purple-600 text-base font-black mb-2 uppercase tracking-wide">Daily Completion</p>
-                <h2 id="completionPercentage" class="text-6xl font-black text-purple-600">0%</h2>
+            <div class="metric-card metric-card-completion p-3 rounded-lg text-center">
+                <p class="metric-label">Daily Completion</p>
+                <h2 id="completionPercentage" class="metric-value text-purple-600">0%</h2>
             </div>
         </div>
 
         <div class="section-grid">
         <div class="section-panel">
-            <h3 class="text-3xl font-black mb-3 text-blue-500 flex items-center gap-3">
-                <span class="w-2 h-10 bg-blue-500 rounded"></span>
+            <h3 class="text-2xl font-black mb-2 text-blue-500 flex items-center gap-2">
+                <span class="w-2 h-8 bg-blue-500 rounded"></span>
                 Work in Process
                 <span id="filterModeBadgeWip" class="text-sm px-3 py-1 rounded-full bg-slate-200 text-slate-700 font-black uppercase tracking-wide">Today+</span>
             </h3>
@@ -216,8 +260,8 @@
         </div>
 
         <div class="section-panel">
-            <h3 class="text-3xl font-black mb-3 text-emerald-600 flex items-center gap-3">
-                <span class="w-2 h-10 bg-emerald-600 rounded"></span>
+            <h3 class="text-2xl font-black mb-2 text-emerald-600 flex items-center gap-2">
+                <span class="w-2 h-8 bg-emerald-600 rounded"></span>
                 Completed Today
                 <span id="filterModeBadgeCompleted" class="text-sm px-3 py-1 rounded-full bg-slate-200 text-slate-700 font-black uppercase tracking-wide">Today+</span>
             </h3>
@@ -554,24 +598,24 @@
                         const headerBorderClass = isNotStarted ? '' : 'wip-header-flash';
 
                         return `
-                        <div class="card p-3 rounded-lg hover:shadow-xl transition-all border-l-4 ${headerBorderClass}" style="border-left-color: ${stationColor};">
-                            <div class="flex justify-between items-start mb-3">
+                        <div class="card p-2 rounded-lg hover:shadow-xl transition-all border-l-4 ${headerBorderClass}" style="border-left-color: ${stationColor};">
+                            <div class="flex justify-between items-start mb-2">
                                 <div class="flex-1">
-                                    <h5 class="text-2xl font-black text-light mb-1 leading-tight">${r['Item'] || '-'}</h5>
-                                    <p class="text-lg text-secondary font-bold">WO: ${r['Work Order'] || '-'}</p>
+                                    <h5 class="text-xl font-black text-light mb-0.5 leading-tight">${r['Item'] || '-'}</h5>
+                                    <p class="text-sm text-secondary font-bold font-mono">WO: ${r['Work Order'] || '-'}</p>
                                 </div>
                                 <span class="status-badge bg-blue-500 text-white">
                                     ${displayStatus}${isNotStarted ? '' : '<span class="wip-dot"></span>'}
                                 </span>
                             </div>
-                            <div class="grid grid-cols-2 gap-3 pt-3 border-t-2 border-gray-200">
+                            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
                                 <div>
-                                    <p class="text-sm text-secondary font-bold mb-1">Priority</p>
-                                    <p class="text-2xl font-black" style="color: ${stationColor};">${getPriority(r)}</p>
+                                    <p class="text-xs text-secondary font-bold mb-0.5">Priority</p>
+                                    <p class="text-lg font-black" style="color: ${stationColor};">${getPriority(r)}</p>
                                 </div>
                                 <div>
-                                    <p class="text-sm text-secondary font-bold mb-1">Build Date</p>
-                                    <p class="text-lg font-black text-light">${getBuildDate(r) || '-'}</p>
+                                    <p class="text-xs text-secondary font-bold mb-0.5">Build Date</p>
+                                    <p class="text-sm font-black text-light">${getBuildDate(r) || '-'}</p>
                                 </div>
                             </div>
                         </div>
@@ -579,12 +623,12 @@
                     }).join('');
 
                     return `
-                        <div class="mb-4">
-                            <h4 class="text-2xl font-black mb-2 flex items-center gap-3" style="color: ${stationColor};">
+                        <div class="station-group">
+                            <h4 class="text-xl font-black mb-1 flex items-center gap-2" style="color: ${stationColor};">
                                 <span class="w-3 h-3 rounded-full" style="background-color: ${stationColor};"></span>
-                                ${station} <span class="text-xl text-secondary font-black">(${stationItems.length})</span>
+                                ${station} <span class="text-base text-secondary font-black">(${stationItems.length})</span>
                             </h4>
-                            <div class="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+                            <div class="station-grid">
                                 ${cards}
                             </div>
                         </div>
@@ -612,24 +656,24 @@
                         const status = (r['Status'] || '').toString().toLowerCase();
                         const isQCWait = status === 'qc wait';
                         return `
-                            <div class="card p-3 rounded-lg hover:shadow-xl transition-all border-l-4 border-emerald-600">
-                                <div class="flex justify-between items-start mb-3">
+                            <div class="card p-2 rounded-lg hover:shadow-xl transition-all border-l-4 border-emerald-600">
+                                <div class="flex justify-between items-start mb-2">
                                     <div class="flex-1">
-                                        <h5 class="text-2xl font-black text-light mb-1 leading-tight">${r['Item'] || '-'}</h5>
-                                        <p class="text-lg text-secondary font-bold">WO: ${r['Work Order'] || '-'}</p>
+                                        <h5 class="text-xl font-black text-light mb-0.5 leading-tight">${r['Item'] || '-'}</h5>
+                                        <p class="text-sm text-secondary font-bold font-mono">WO: ${r['Work Order'] || '-'}</p>
                                     </div>
                                     <span class="status-badge ${isQCWait ? 'bg-yellow-500' : 'bg-emerald-600'} text-white">
                                         ${isQCWait ? 'QC WAIT' : 'COMPLETED'}
                                     </span>
                                 </div>
-                                <div class="grid grid-cols-2 gap-3 pt-3 border-t-2 border-gray-200">
+                                <div class="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
                                     <div>
-                                        <p class="text-sm text-secondary font-bold mb-1">Priority</p>
-                                        <p class="text-2xl font-black text-emerald-600">${getPriority(r)}</p>
+                                        <p class="text-xs text-secondary font-bold mb-0.5">Priority</p>
+                                        <p class="text-lg font-black text-emerald-600">${getPriority(r)}</p>
                                     </div>
                                     <div>
-                                        <p class="text-sm text-secondary font-bold mb-1">Build Date</p>
-                                        <p class="text-lg font-black text-light">${getBuildDate(r) || '-'}</p>
+                                        <p class="text-xs text-secondary font-bold mb-0.5">Build Date</p>
+                                        <p class="text-sm font-black text-light">${getBuildDate(r) || '-'}</p>
                                     </div>
                                 </div>
                             </div>
@@ -637,12 +681,12 @@
                     }).join('');
 
                     return `
-                        <div class="mb-4">
-                            <h4 class="text-2xl font-black mb-2 flex items-center gap-3" style="color: ${stationColor};">
+                        <div class="station-group">
+                            <h4 class="text-xl font-black mb-1 flex items-center gap-2" style="color: ${stationColor};">
                                 <span class="w-3 h-3 rounded-full" style="background-color: ${stationColor};"></span>
-                                ${station} <span class="text-xl text-secondary font-black">(${stationItems.length})</span>
+                                ${station} <span class="text-base text-secondary font-black">(${stationItems.length})</span>
                             </h4>
-                            <div class="grid grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+                            <div class="station-grid">
                                 ${cards}
                             </div>
                         </div>
