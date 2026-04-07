@@ -433,6 +433,7 @@
             return isoDate >= today;
         };
         const allowedWorkstationOrder = ['IXCWS1', 'IXCWS2', 'ZTSWS1', 'ZTSWS2', 'ZTSWS3'];
+        const simulationWorkstationLimit = 3;
 
         function getAllowedWorkstationsFromPlan(rows, limit = 5) {
             return allowedWorkstationOrder.slice(0, limit);
@@ -512,7 +513,7 @@
             const rows = [];
             let workOrder = 900000;
             const actualRows = actualData?.rows || [];
-            const stations = getAllowedWorkstationsFromPlan(actualRows, 5);
+            const stations = getAllowedWorkstationsFromPlan(actualRows, simulationWorkstationLimit);
 
             const uniquePlanItems = [...new Set(
                 actualRows
