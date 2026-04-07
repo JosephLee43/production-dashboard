@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const fs = require('fs');
 const { Server } = require('socket.io');
 const chokidar = require('chokidar');
 const ExcelJS = require('exceljs');
@@ -19,6 +20,7 @@ let cachedData = null;
 let isReading = false;
 let refreshInProgress = false;
 let refreshQueued = false;
+let lastKnownFileSignature = null;
 
 app.use(express.static('public'));
 
@@ -166,6 +168,31 @@ async function requestDataRefresh(source = 'manual') {
     }
 }
 
+function getFileSignature() {
+    try {
+        const stats = fs.statSync(FILE_PATH);
+        return `${stats.size}:${stats.mtimeMs}`;
+    } catch (error) {
+        return null;
+    }
+}
+
+function startFallbackFilePolling(intervalMs = 8000) {
+    lastKnownFileSignature = getFileSignature();
+
+    setInterval(async () => {
+        const currentSignature = getFileSignature();
+
+        if (!currentSignature || currentSignature === lastKnownFileSignature) {
+            return;
+        }
+
+        lastKnownFileSignature = currentSignature;
+        console.log('File signature changed via fallback poll. Syncing...');
+        await requestDataRefresh('poll:signature');
+    }, intervalMs);
+}
+
 // Push updates when file is saved
 const watcher = chokidar.watch(FILE_PATH, {
     persistent: true,
@@ -178,17 +205,21 @@ const watcher = chokidar.watch(FILE_PATH, {
 
 watcher.on('change', async (path) => {
     console.log('File update detected. Syncing...', path);
+    lastKnownFileSignature = getFileSignature();
     await requestDataRefresh('watch:change');
 });
 
 watcher.on('add', async (path) => {
     console.log('File add detected. Syncing...', path);
+    lastKnownFileSignature = getFileSignature();
     await requestDataRefresh('watch:add');
 });
 
 watcher.on('error', error => {
     console.error('Watcher error:', error);
 });
+
+startFallbackFilePolling();
 
 // Check for day change every minute and refresh cache if needed
 let lastCheckedDate = dayjs().format('YYYY-MM-DD');

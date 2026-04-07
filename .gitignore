@@ -5,3 +5,5 @@ server-debug.log
 .DS_Store
 Thumbs.db
 Weekly Build Plan for Instruments Cell Wotton.xlsx
+*.xlsx
+*.code-workspace
