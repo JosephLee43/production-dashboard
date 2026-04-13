@@ -82,9 +82,9 @@
             background: #ffffff;
         }
         .status-badge {
-            min-width: 112px;
+            width: 136px;
             text-align: center;
-            padding: 0.35rem 0.6rem;
+            padding: 0.35rem 0.7rem;
             border-radius: 0.5rem;
             font-size: 0.8rem;
             font-weight: 900;
@@ -93,6 +93,10 @@
             box-shadow: 0 6px 14px rgba(0, 0, 0, 0.16);
             white-space: nowrap;
             margin-left: 0.35rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.32rem;
         }
         .empty-state {
             text-align: center;
@@ -113,7 +117,7 @@
             height: 0.5rem;
             border-radius: 50%;
             background-color: rgb(var(--wip-accent-rgb));
-            margin-left: 0.35rem;
+            margin-left: 0;
             vertical-align: middle;
         }
         @keyframes headerBorderFlash {
@@ -185,6 +189,15 @@
             display: flex;
             flex-direction: column;
         }
+        .station-grid > .station-card {
+            min-height: 154px;
+        }
+        .station-card-top {
+            min-height: 58px;
+        }
+        .station-card-meta {
+            margin-top: auto;
+        }
         .station-grid > .card > div:last-child {
             margin-top: auto;
         }
@@ -218,7 +231,7 @@
                 padding-bottom: 0.55rem;
             }
             .status-badge {
-                min-width: 104px;
+                width: 124px;
                 font-size: 0.75rem;
                 padding: 0.3rem 0.5rem;
             }
@@ -273,7 +286,7 @@
                 height: 1.6rem;
             }
             .status-badge {
-                min-width: 96px;
+                width: 116px;
                 font-size: 0.68rem;
                 padding: 0.22rem 0.45rem;
             }
@@ -286,6 +299,12 @@
             }
             .station-grid {
                 gap: 0.4rem;
+            }
+            .station-grid > .station-card {
+                min-height: 132px;
+            }
+            .station-card-top {
+                min-height: 46px;
             }
             .card {
                 padding: 0.45rem !important;
@@ -712,8 +731,8 @@
                         const inProgressCardClass = isNotStarted ? '' : 'wip-header-flash wip-card-pulse';
 
                         return `
-                        <div class="card p-2 rounded-lg hover:shadow-xl transition-all border-l-4 ${inProgressCardClass}" style="border-left-color: ${stationColor};">
-                            <div class="flex justify-between items-start mb-2">
+                        <div class="card station-card p-2 rounded-lg hover:shadow-xl transition-all border-l-4 ${inProgressCardClass}" style="border-left-color: ${stationColor};">
+                            <div class="station-card-top flex justify-between items-start mb-2">
                                 <div class="flex-1">
                                     <h5 class="text-xl font-black text-light mb-0.5 leading-tight">${r['Item'] || '-'}</h5>
                                     <p class="text-sm text-secondary font-bold font-mono">WO: ${r['Work Order'] || '-'}</p>
@@ -722,7 +741,7 @@
                                     ${displayStatus}${isNotStarted ? '' : '<span class="wip-dot"></span>'}
                                 </span>
                             </div>
-                            <div class="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
+                            <div class="station-card-meta grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
                                 <div>
                                     <p class="text-xs text-secondary font-bold mb-0.5">Priority</p>
                                     <p class="text-lg font-black" style="color: ${stationColor};">${getPriority(r)}</p>
@@ -770,8 +789,8 @@
                         const status = (r['Status'] || '').toString().toLowerCase();
                         const isQCWait = status === 'qc wait';
                         return `
-                            <div class="card p-2 rounded-lg hover:shadow-xl transition-all border-l-4 border-emerald-600">
-                                <div class="flex justify-between items-start mb-2">
+                            <div class="card station-card p-2 rounded-lg hover:shadow-xl transition-all border-l-4 border-emerald-600">
+                                <div class="station-card-top flex justify-between items-start mb-2">
                                     <div class="flex-1">
                                         <h5 class="text-xl font-black text-light mb-0.5 leading-tight">${r['Item'] || '-'}</h5>
                                         <p class="text-sm text-secondary font-bold font-mono">WO: ${r['Work Order'] || '-'}</p>
@@ -780,7 +799,7 @@
                                         ${isQCWait ? 'QC WAIT' : 'COMPLETED'}
                                     </span>
                                 </div>
-                                <div class="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
+                                <div class="station-card-meta grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
                                     <div>
                                         <p class="text-xs text-secondary font-bold mb-0.5">Priority</p>
                                         <p class="text-lg font-black text-emerald-600">${getPriority(r)}</p>
