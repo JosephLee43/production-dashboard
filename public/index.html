@@ -486,6 +486,11 @@
             }
             return isoDate >= today;
         };
+        const isScheduledForToday = (row, today) => {
+            const isoDate = getIsoBuildDate(row);
+            if (!isoDate) return false;
+            return isoDate === today;
+        };
         const allowedWorkstationOrder = ['IXCWS1', 'IXCWS2', 'ZTSWS1', 'ZTSWS2', 'ZTSWS3'];
         const simulationWorkstationLimit = 3;
 
@@ -694,9 +699,7 @@
             document.getElementById('syncTime').innerText = data.lastUpdated;
 
             // Calculate metrics - check multiple possible date column names
-            const todayScheduled = rows.filter(r => {
-                return isScheduledForWipWindow(r, today);
-            });
+            const todayScheduled = rows.filter(r => isScheduledForToday(r, today));
             
             const completed = todayScheduled.filter(r => {
                 const status = normalizeStatus(r);
