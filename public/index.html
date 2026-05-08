@@ -429,9 +429,14 @@
         ].includes(status);
         const getBuildDate = (row) => row['Planned Finish Date'] || row['Build Date'] || row['Date'] || row['Finish Date'];
         const getPriority = (row) => row['Workstation Priority'] || row['Priority'] || '-';
+        const isoBuildDateCache = new WeakMap();
+        const isoPlannedStartDateCache = new WeakMap();
+        const isoCompletedDateCache = new WeakMap();
         const normalizeStationCode = (name) => {
             const normalized = (name || '').toString().trim().toUpperCase();
             if (normalized === 'ZTHWS1') return 'ZTSWS1';
+            if (normalized === 'ZTHWS2') return 'ZTSWS2';
+            if (normalized === 'ZTHWS3') return 'ZTSWS3';
             return normalized;
         };
         const toIsoDateString = (value) => {
@@ -467,10 +472,63 @@
             return null;
         };
         const getIsoBuildDate = (row) => {
+            if (isoBuildDateCache.has(row)) {
+                return isoBuildDateCache.get(row);
+            }
+
             const buildDate = getBuildDate(row);
-            if (!buildDate) return null;
+            if (!buildDate) {
+                isoBuildDateCache.set(row, null);
+                return null;
+            }
+
             const isoDate = toIsoDateString(buildDate);
-            if (!isoDate) return null;
+            if (!isoDate) {
+                isoBuildDateCache.set(row, null);
+                return null;
+            }
+
+            isoBuildDateCache.set(row, isoDate);
+            return isoDate;
+        };
+        const getIsoPlannedStartDate = (row) => {
+            if (isoPlannedStartDateCache.has(row)) {
+                return isoPlannedStartDateCache.get(row);
+            }
+
+            const plannedStartDate = row['Planned Start Date'] || row['Start Date'];
+            if (!plannedStartDate) {
+                isoPlannedStartDateCache.set(row, null);
+                return null;
+            }
+
+            const isoDate = toIsoDateString(plannedStartDate);
+            if (!isoDate) {
+                isoPlannedStartDateCache.set(row, null);
+                return null;
+            }
+
+            isoPlannedStartDateCache.set(row, isoDate);
+            return isoDate;
+        };
+        const getIsoCompletedDate = (row) => {
+            if (isoCompletedDateCache.has(row)) {
+                return isoCompletedDateCache.get(row);
+            }
+
+            const completedDate = row['Date completed'] || row['Completed Date'];
+            if (!completedDate) {
+                isoCompletedDateCache.set(row, null);
+                return null;
+            }
+
+            const isoDate = toIsoDateString(completedDate);
+            if (!isoDate) {
+                isoCompletedDateCache.set(row, null);
+                return null;
+            }
+
+            isoCompletedDateCache.set(row, isoDate);
             return isoDate;
         };
         const isScheduledForStandardWindow = (row, today) => {
@@ -479,23 +537,54 @@
             return isoDate >= today;
         };
         const isScheduledForWipWindow = (row, today) => {
-            const isoDate = getIsoBuildDate(row);
-            if (!isoDate) return false;
+            const plannedStartDate = getIsoPlannedStartDate(row);
+            const plannedFinishDate = getIsoBuildDate(row);
+
+            if (!plannedStartDate && !plannedFinishDate) return false;
             if (showOverdueUnits) {
                 return true;
             }
-            return isoDate >= today;
+
+            if (plannedStartDate && plannedFinishDate) {
+                return plannedStartDate <= today && plannedFinishDate >= today;
+            }
+
+            return (plannedFinishDate || plannedStartDate) >= today;
         };
         const isScheduledForToday = (row, today) => {
             const isoDate = getIsoBuildDate(row);
             if (!isoDate) return false;
             return isoDate === today;
         };
+        const isCompletedToday = (row, today) => {
+            const isoDate = getIsoCompletedDate(row);
+            if (!isoDate) return false;
+            return isoDate === today;
+        };
         const allowedWorkstationOrder = ['IXCWS1', 'IXCWS2', 'ZTSWS1', 'ZTSWS2', 'ZTSWS3'];
         const simulationWorkstationLimit = 3;
 
-        function getAllowedWorkstationsFromPlan(rows, limit = 5) {
-            return allowedWorkstationOrder.slice(0, limit);
+        function getAllowedWorkstationsFromPlan(rows, limit = null) {
+            const presentStations = [...new Set(
+                (rows || [])
+                    .map(row => normalizeStationCode(row['Workstation'] || row['Work Station']))
+                    .filter(station => station && station !== 'NULL')
+            )];
+
+            const orderedPreferredStations = allowedWorkstationOrder
+                .map(station => normalizeStationCode(station))
+                .filter(station => presentStations.includes(station));
+
+            const extraStations = presentStations
+                .filter(station => !allowedWorkstationOrder.includes(station))
+                .sort();
+
+            const mergedStations = [...new Set([...orderedPreferredStations, ...extraStations])];
+            if (typeof limit === 'number') {
+                return mergedStations.slice(0, limit);
+            }
+
+            return mergedStations;
         }
         const workstationPalette = [
             '#a78bfa',
@@ -673,7 +762,7 @@
             const today = data.serverToday;
             const rows = data.rows || [];
             const groupedByStation = data.groupedByStation || {};
-            const allowedWorkstations = getAllowedWorkstationsFromPlan(rows, 5);
+            const allowedWorkstations = getAllowedWorkstationsFromPlan(rows);
             const canonicalGroupedByStation = Object.entries(groupedByStation).reduce((acc, [rawStation, stationRows]) => {
                 const canonicalStation = normalizeStationCode(rawStation);
                 if (!canonicalStation || canonicalStation === 'NULL' || !Array.isArray(stationRows)) {
@@ -701,9 +790,9 @@
             // Calculate metrics - check multiple possible date column names
             const todayScheduled = rows.filter(r => isScheduledForToday(r, today));
             
-            const completed = todayScheduled.filter(r => {
+            const completed = rows.filter(r => {
                 const status = normalizeStatus(r);
-                return isCompletedStatus(status);
+                return isCompletedStatus(status) && isCompletedToday(r, today);
             });
             
             const completionPercentage = todayScheduled.length > 0 
@@ -783,7 +872,7 @@
                     const stationColor = getWorkstationColor(station);
                     const stationItems = stationDataSource[station].filter(r => {
                         const status = normalizeStatus(r);
-                        return isScheduledForStandardWindow(r, today) && isCompletedStatus(status);
+                        return isCompletedStatus(status) && isCompletedToday(r, today);
                     });
 
                     if (stationItems.length === 0) return '';

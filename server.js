@@ -1,10 +1,14 @@
 const express = require('express');
 const http = require('http');
 const fs = require('fs');
+const path = require('path');
 const { Server } = require('socket.io');
 const chokidar = require('chokidar');
 const ExcelJS = require('exceljs');
 const dayjs = require('dayjs');
+const customParseFormat = require('dayjs/plugin/customParseFormat');
+
+dayjs.extend(customParseFormat);
 
 const app = express();
 const server = http.createServer(app);
@@ -14,6 +18,8 @@ const io = new Server(server);
 // IMPORTANT: Update this to your actual OneDrive path
 const FILE_PATH = 'C:\\Users\\jleemil\\Azenta, Inc\\Instrument Team - Ziath Build Plan\\2026 Weekly Build Plan - Instruments Cell.xlsx';
 const PORT = 3000;
+const FILE_DIR = path.dirname(FILE_PATH);
+const FILE_NAME = path.basename(FILE_PATH).toLowerCase();
 
 // Cache the last parsed data to avoid re-reading on every connection
 let cachedData = null;
@@ -21,6 +27,114 @@ let isReading = false;
 let refreshInProgress = false;
 let refreshQueued = false;
 let lastKnownFileSignature = null;
+
+function resolveWorksheet(workbook) {
+    const currentMonthName = dayjs().format('MMMM-YYYY');
+    const directMatch = workbook.getWorksheet(currentMonthName);
+
+    if (directMatch) {
+        return {
+            monthLabel: currentMonthName,
+            worksheet: directMatch,
+            resolution: 'exact-current-month'
+        };
+    }
+
+    const monthNamedSheets = workbook.worksheets
+        .map((worksheet) => {
+            const parsed = dayjs(worksheet.name, 'MMMM-YYYY', true);
+            if (!parsed.isValid()) {
+                return null;
+            }
+
+            return {
+                worksheet,
+                parsedMonth: parsed
+            };
+        })
+        .filter(Boolean)
+        .sort((left, right) => left.parsedMonth.valueOf() - right.parsedMonth.valueOf());
+
+    if (monthNamedSheets.length > 0) {
+        const latestMonthSheet = monthNamedSheets[monthNamedSheets.length - 1];
+        return {
+            monthLabel: latestMonthSheet.worksheet.name,
+            worksheet: latestMonthSheet.worksheet,
+            resolution: 'latest-month-sheet'
+        };
+    }
+
+    return {
+        monthLabel: workbook.worksheets[0]?.name || currentMonthName,
+        worksheet: workbook.worksheets[0],
+        resolution: 'first-worksheet-fallback'
+    };
+}
+
+function normalizeRowDate(value) {
+    if (!value) {
+        return null;
+    }
+
+    if (value instanceof Date || (value && value.constructor?.name === 'Date')) {
+        const parsed = dayjs(value);
+        return parsed.isValid() ? parsed.format('YYYY-MM-DD') : null;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+        const parsed = dayjs(new Date(excelEpoch.getTime() + Math.round(value) * 86400000));
+        return parsed.isValid() ? parsed.format('YYYY-MM-DD') : null;
+    }
+
+    const text = value.toString().trim();
+    const isoMatch = text.match(/\d{4}-\d{2}-\d{2}/);
+    if (isoMatch) {
+        return isoMatch[0];
+    }
+
+    const slashMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (slashMatch) {
+        const month = slashMatch[1].padStart(2, '0');
+        const day = slashMatch[2].padStart(2, '0');
+        return `${slashMatch[3]}-${month}-${day}`;
+    }
+
+    const parsed = dayjs(text);
+    return parsed.isValid() ? parsed.format('YYYY-MM-DD') : null;
+}
+
+function deriveServerToday(rows, resolution) {
+    const realToday = dayjs().format('YYYY-MM-DD');
+
+    if (resolution === 'exact-current-month') {
+        return realToday;
+    }
+
+    const dateFields = [
+        'Planned Finish Date',
+        'Planned Start Date',
+        'Build Date',
+        'Date',
+        'Finish Date',
+        'Date completed'
+    ];
+
+    const candidateDates = rows
+        .flatMap((row) => dateFields.map((field) => normalizeRowDate(row[field])))
+        .filter(Boolean)
+        .sort();
+
+    if (candidateDates.length === 0) {
+        return realToday;
+    }
+
+    const latestOnOrBeforeToday = [...candidateDates]
+        .reverse()
+        .find((candidateDate) => candidateDate <= realToday);
+
+    return latestOnOrBeforeToday || candidateDates[candidateDates.length - 1];
+}
 
 app.use(express.static('public'));
 
@@ -50,8 +164,8 @@ async function parseExcel(forceRefresh = false) {
         const currentMonthName = dayjs().format('MMMM-YYYY');
         console.log('Looking for sheet:', currentMonthName);
         console.log('Available sheets:', workbook.worksheets.map(ws => ws.name));
-        const sheet = workbook.getWorksheet(currentMonthName) || workbook.worksheets[0];
-        console.log('Using sheet:', sheet ? sheet.name : 'NONE FOUND');
+        const { worksheet: sheet, monthLabel, resolution } = resolveWorksheet(workbook);
+        console.log('Using sheet:', sheet ? sheet.name : 'NONE FOUND', `(${resolution})`);
         
         if (!sheet) {
             throw new Error('No worksheet found in workbook');
@@ -129,11 +243,14 @@ async function parseExcel(forceRefresh = false) {
             });
         });
         
+        const effectiveServerToday = deriveServerToday(data, resolution);
+        console.log('Using reference date:', effectiveServerToday);
+
         cachedData = {
-            month: currentMonthName,
+            month: monthLabel,
             rows: data,
             groupedByStation: groupedData,
-            serverToday: dayjs().format('YYYY-MM-DD'),
+            serverToday: effectiveServerToday,
             lastUpdated: dayjs().format('HH:mm:ss')
         };
         isReading = false;
@@ -171,7 +288,7 @@ async function requestDataRefresh(source = 'manual') {
 function getFileSignature() {
     try {
         const stats = fs.statSync(FILE_PATH);
-        return `${stats.size}:${stats.mtimeMs}`;
+        return `${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}`;
     } catch (error) {
         return null;
     }
@@ -193,33 +310,67 @@ function startFallbackFilePolling(intervalMs = 8000) {
     }, intervalMs);
 }
 
+function isTargetWorkbookPath(changedPath) {
+    if (!changedPath) {
+        return false;
+    }
+
+    try {
+        return path.basename(changedPath).toLowerCase() === FILE_NAME;
+    } catch (error) {
+        return false;
+    }
+}
+
 // Push updates when file is saved
-const watcher = chokidar.watch(FILE_PATH, {
+const watcher = chokidar.watch(FILE_DIR, {
     persistent: true,
     ignoreInitial: true,
+    depth: 0,
+    usePolling: true,
+    interval: 1000,
+    binaryInterval: 1500,
     awaitWriteFinish: {
         stabilityThreshold: 1800,
         pollInterval: 150
     }
 });
 
-watcher.on('change', async (path) => {
-    console.log('File update detected. Syncing...', path);
+watcher.on('change', async (changedPath) => {
+    if (!isTargetWorkbookPath(changedPath)) {
+        return;
+    }
+
+    console.log('File update detected. Syncing...', changedPath);
     lastKnownFileSignature = getFileSignature();
     await requestDataRefresh('watch:change');
 });
 
-watcher.on('add', async (path) => {
-    console.log('File add detected. Syncing...', path);
+watcher.on('add', async (changedPath) => {
+    if (!isTargetWorkbookPath(changedPath)) {
+        return;
+    }
+
+    console.log('File add detected. Syncing...', changedPath);
     lastKnownFileSignature = getFileSignature();
     await requestDataRefresh('watch:add');
+});
+
+watcher.on('unlink', async (changedPath) => {
+    if (!isTargetWorkbookPath(changedPath)) {
+        return;
+    }
+
+    console.log('File unlink detected. Waiting for re-add...', changedPath);
+    lastKnownFileSignature = null;
+    await requestDataRefresh('watch:unlink');
 });
 
 watcher.on('error', error => {
     console.error('Watcher error:', error);
 });
 
-startFallbackFilePolling();
+startFallbackFilePolling(3000);
 
 // Check for day change every minute and refresh cache if needed
 let lastCheckedDate = dayjs().format('YYYY-MM-DD');
