@@ -140,12 +140,10 @@ app.use(express.static('public'));
 
 async function parseExcel(forceRefresh = false) {
     if (!forceRefresh && cachedData) {
-        console.log('Returning cached data');
         return cachedData;
     }
     
     if (isReading) {
-        console.log('Already reading file, waiting...');
         // Wait for the current read to complete
         while (isReading) {
             await new Promise(resolve => setTimeout(resolve, 100));
@@ -156,16 +154,9 @@ async function parseExcel(forceRefresh = false) {
     isReading = true;
     const workbook = new ExcelJS.Workbook();
     try {
-        console.log('Attempting to read file:', FILE_PATH);
         await workbook.xlsx.readFile(FILE_PATH);
-        console.log('File read successfully');
-        
-        // Match sheet name to current month (e.g., "December-2025")
-        const currentMonthName = dayjs().format('MMMM-YYYY');
-        console.log('Looking for sheet:', currentMonthName);
-        console.log('Available sheets:', workbook.worksheets.map(ws => ws.name));
         const { worksheet: sheet, monthLabel, resolution } = resolveWorksheet(workbook);
-        console.log('Using sheet:', sheet ? sheet.name : 'NONE FOUND', `(${resolution})`);
+        console.log(`Sheet: ${sheet ? sheet.name : 'NONE'} (${resolution})`);
         
         if (!sheet) {
             throw new Error('No worksheet found in workbook');
@@ -179,8 +170,6 @@ async function parseExcel(forceRefresh = false) {
             headers.push(cell.value ? cell.value.toString().trim() : null);
         });
         
-        console.log('Excel Headers:', headers);
-
         sheet.eachRow((row, rowNumber) => {
             if (rowNumber === 1) return;
             const rowData = {};
@@ -217,7 +206,7 @@ async function parseExcel(forceRefresh = false) {
             }
         });
 
-        console.log('Parsed rows:', data.length);
+
         
         // Group by workstation and sort by priority
         const groupedData = {};
@@ -244,7 +233,7 @@ async function parseExcel(forceRefresh = false) {
         });
         
         const effectiveServerToday = deriveServerToday(data, resolution);
-        console.log('Using reference date:', effectiveServerToday);
+        console.log(`Rows: ${data.length} | Date: ${effectiveServerToday}`);
 
         cachedData = {
             month: monthLabel,
@@ -266,7 +255,6 @@ async function parseExcel(forceRefresh = false) {
 async function requestDataRefresh(source = 'manual') {
     if (refreshInProgress) {
         refreshQueued = true;
-        console.log(`Refresh already in progress; queueing another pass (${source})`);
         return;
     }
 
@@ -274,7 +262,7 @@ async function requestDataRefresh(source = 'manual') {
     try {
         do {
             refreshQueued = false;
-            console.log(`Refreshing dashboard data (${source})...`);
+            console.log(`Refreshing (${source})...`);
             const data = await parseExcel(true);
             if (data) {
                 io.emit('update', data);
@@ -305,7 +293,7 @@ function startFallbackFilePolling(intervalMs = 8000) {
         }
 
         lastKnownFileSignature = currentSignature;
-        console.log('File signature changed via fallback poll. Syncing...');
+        console.log('Poll: file changed, syncing...');
         await requestDataRefresh('poll:signature');
     }, intervalMs);
 }
@@ -377,25 +365,19 @@ let lastCheckedDate = dayjs().format('YYYY-MM-DD');
 setInterval(async () => {
     const currentDate = dayjs().format('YYYY-MM-DD');
     if (currentDate !== lastCheckedDate) {
-        console.log('New day detected. Refreshing cache...');
+        console.log(`New day: ${currentDate}`);
         lastCheckedDate = currentDate;
-        console.log('Broadcasting update for new day:', currentDate);
         await requestDataRefresh('day-rollover');
     }
 }, 60000); // Check every minute
 
 io.on('connection', async (socket) => {
     console.log('Client connected');
-    
-    // Send loading state immediately
     socket.emit('loading', { message: 'Reading Excel file from OneDrive...' });
-    
     const d = await parseExcel();
     if (d) {
-        console.log('Sending data to client');
         socket.emit('update', d);
     } else {
-        console.log('No data to send');
         socket.emit('error', { message: 'Failed to read Excel file' });
     }
 });

@@ -541,15 +541,21 @@
             const plannedFinishDate = getIsoBuildDate(row);
 
             if (!plannedStartDate && !plannedFinishDate) return false;
+
+            const finishDate = plannedFinishDate || plannedStartDate;
+
             if (showOverdueUnits) {
-                return true;
+                // Include overdue (past finish) OR today's items — never future
+                return finishDate <= today;
             }
 
+            // Standard window: start <= today <= finish (never show future build dates)
             if (plannedStartDate && plannedFinishDate) {
                 return plannedStartDate <= today && plannedFinishDate >= today;
             }
 
-            return (plannedFinishDate || plannedStartDate) >= today;
+            // Fallback: only show if finish/start <= today (i.e. not a future unit)
+            return finishDate <= today;
         };
         const isScheduledForToday = (row, today) => {
             const isoDate = getIsoBuildDate(row);
@@ -716,23 +722,27 @@
                 stationPriority[station] = 1;
             });
 
-            const addCategoryUnits = (prefix, count, statusFactory) => {
-                for (let i = 0; i < count; i++) {
-                    const station = stations[i % stations.length];
-                    rows.push({
-                        Workstation: station,
-                        'Workstation Priority': stationPriority[station]++,
-                        'Planned Finish Date': today,
-                        'Work Order': `${workOrder++}`,
-                        Item: getSimulatedItemName(),
-                        Status: statusFactory(i)
-                    });
-                }
+            const addSimulatedUnit = (station, status) => {
+                const isCompletedStatus = status === 'Completed' || status === 'QC Wait';
+                rows.push({
+                    Workstation: station,
+                    'Workstation Priority': stationPriority[station]++,
+                    'Planned Start Date': today,
+                    'Planned Finish Date': today,
+                    'Date completed': isCompletedStatus ? today : null,
+                    'Work Order': `${workOrder++}`,
+                    Item: getSimulatedItemName(),
+                    Status: status
+                });
             };
 
-            addCategoryUnits('NS', 7, () => 'Not Started');
-            addCategoryUnits('WIP', 7, () => 'WIP');
-            addCategoryUnits('DONE', 6, (i) => (i % 4 === 0 ? 'QC Wait' : 'Completed'));
+            stations.forEach((station, index) => {
+                addSimulatedUnit(station, 'WIP');
+                addSimulatedUnit(station, 'Not Started');
+                addSimulatedUnit(station, index % 2 === 0 ? 'Completed' : 'QC Wait');
+                addSimulatedUnit(station, 'Not Started');
+                addSimulatedUnit(station, index % 2 === 0 ? 'QC Wait' : 'Completed');
+            });
 
             const groupedByStation = {};
             rows.forEach(row => {
