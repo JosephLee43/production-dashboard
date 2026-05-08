@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ziath Production Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
@@ -14,7 +17,10 @@
         body { 
             background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
             color: #1e293b; 
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Inter', Ubuntu, Cantarell, 'Noto Sans', 'Segoe UI', Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
             transition: background 0.3s ease, color 0.3s ease;
         }
         .card { 
@@ -64,8 +70,11 @@
             position: sticky;
             top: 0;
             z-index: 30;
+            /* Solid fallback for Linux Chromium where backdrop-filter may be disabled */
+            background: rgb(248, 250, 252);
+            background: rgba(248, 250, 252, 0.95);
+            -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
-            background: rgba(248, 250, 252, 0.85);
             border: 1px solid rgba(226, 232, 240, 0.9);
             box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
         }
@@ -142,10 +151,12 @@
         }
         .wip-header-flash {
             animation: headerBorderFlash 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            will-change: box-shadow;
         }
         .wip-card-pulse {
             animation: wipCardPulse 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
             border-color: rgba(var(--wip-accent-rgb), 0.24);
+            will-change: box-shadow, border-color;
         }
         .dashboard-shell {
             height: calc(100vh - 0.75rem);
