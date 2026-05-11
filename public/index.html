@@ -438,6 +438,12 @@
             'to do',
             'todo'
         ].includes(status);
+        const getCompletionCategoryRank = (row) => {
+            const status = normalizeStatus(row);
+            if (status === 'completed') return 0;
+            if (status === 'qc wait') return 1;
+            return 2;
+        };
         const getBuildDate = (row) => row['Planned Finish Date'] || row['Build Date'] || row['Date'] || row['Finish Date'];
         const getPriority = (row) => row['Workstation Priority'] || row['Priority'] || '-';
         const isoBuildDateCache = new WeakMap();
@@ -802,6 +808,7 @@
                 }
                 return acc;
             }, {});
+            const visibleRows = Object.values(stationDataSource).flat();
 
             document.getElementById('monthLabel').innerText = simulationMode
                 ? `${data.month} • Simulated View`
@@ -809,9 +816,9 @@
             document.getElementById('syncTime').innerText = data.lastUpdated;
 
             // Calculate metrics - check multiple possible date column names
-            const todayScheduled = rows.filter(r => isScheduledForToday(r, today));
+            const todayScheduled = visibleRows.filter(r => isScheduledForToday(r, today));
             
-            const completed = rows.filter(r => {
+            const completed = visibleRows.filter(r => {
                 const status = normalizeStatus(r);
                 return isCompletedStatus(status) && isCompletedToday(r, today);
             });
@@ -894,6 +901,15 @@
                     const stationItems = stationDataSource[station].filter(r => {
                         const status = normalizeStatus(r);
                         return isCompletedStatus(status) && isCompletedToday(r, today);
+                    }).sort((a, b) => {
+                        const categoryCompare = getCompletionCategoryRank(a) - getCompletionCategoryRank(b);
+                        if (categoryCompare !== 0) {
+                            return categoryCompare;
+                        }
+
+                        const priorityA = parseInt(a['Workstation Priority'] || a['Priority'] || 999, 10);
+                        const priorityB = parseInt(b['Workstation Priority'] || b['Priority'] || 999, 10);
+                        return priorityA - priorityB;
                     });
 
                     if (stationItems.length === 0) return '';
