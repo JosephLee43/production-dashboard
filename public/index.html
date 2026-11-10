@@ -941,7 +941,7 @@
                     const stationColor = getWorkstationColor(station);
                     const stationItems = stationDataSource[station].filter(r => {
                         const status = normalizeStatus(r);
-                        return isScheduledForWipWindow(r, today) && !isCompletedStatus(status);
+                        return (status === 'wip' || isScheduledForWipWindow(r, today)) && !isCompletedStatus(status);
                     }).sort((left, right) => {
                         if (simulationMode) {
                             const leftNotStarted = isNotStartedStatus(normalizeStatus(left));
