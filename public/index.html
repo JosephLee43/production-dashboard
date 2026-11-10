@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ziath Production Dashboard</title>
+    <title>Instruments Cell Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -21,7 +21,6 @@
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             text-rendering: optimizeLegibility;
-            transition: background 0.3s ease, color 0.3s ease;
         }
         .card { 
             background: #ffffff; 
@@ -222,6 +221,12 @@
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
             overflow: hidden;
+        }
+        .station-item-code {
+            overflow-wrap: anywhere;
+            font-size: 1rem !important;
+            line-height: 1.2 !important;
+            min-height: 2.4em !important;
         }
         @media (min-width: 1200px) {
             .station-grid {
@@ -441,8 +446,9 @@
         <div class="toolbar rounded-xl px-4 py-3 mb-2">
         <div class="flex justify-between items-center gap-4">
             <div>
-                <h1 class="dashboard-title text-4xl font-black tracking-tight text-light leading-none">
-                    Ziath <span class="text-purple-600">Dashboard</span>
+                <h1 class="dashboard-title text-4xl font-black tracking-tight leading-none flex flex-wrap items-center gap-3">
+                    <span class="bg-gradient-to-r from-slate-900 via-violet-700 to-purple-600 bg-clip-text text-transparent">Instruments Cell</span>
+                    <span class="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-base font-black uppercase tracking-[0.18em] text-violet-700 shadow-sm">Dashboard</span>
                 </h1>
                 <p id="monthLabel" class="text-secondary font-bold text-lg mt-1"></p>
             </div>
@@ -535,7 +541,7 @@
             if (status === 'qc wait') return 1;
             return 2;
         };
-        const getBuildDate = (row) => row['Planned Finish Date'] || row['Build Date'] || row['Date'] || row['Finish Date'];
+        const getBuildDate = (row) => row['Planned Finish Date'] || row['Planned into QC Date'] || row['Planned Into QC Date'] || row['Build Date'] || row['Date'] || row['Finish Date'];
         const getPriority = (row) => row['Workstation Priority'] || row['Priority'] || '-';
         const isoBuildDateCache = new WeakMap();
         const isoPlannedStartDateCache = new WeakMap();
@@ -624,7 +630,7 @@
                 return isoCompletedDateCache.get(row);
             }
 
-            const completedDate = row['Date completed'] || row['Completed Date'];
+            const completedDate = row['Date completed'] || row['Date completed into QC'] || row['Completed Date'];
             if (!completedDate) {
                 isoCompletedDateCache.set(row, null);
                 return null;
@@ -773,7 +779,6 @@
         function buildSimulatedData(actualData) {
             const today = actualData?.serverToday || new Date().toISOString().split('T')[0];
             const rows = [];
-            let workOrder = 900000;
             const actualRows = actualData?.rows || [];
             const stations = getAllowedWorkstationsFromPlan(actualRows, simulationWorkstationLimit);
 
@@ -825,6 +830,14 @@
                 return itemName;
             };
 
+            const getSimulatedWorkOrder = (itemName) => {
+                const sourceRow = actualRows.find(row =>
+                    (row['Item'] || '').toString().trim() === itemName
+                );
+                const workOrder = sourceRow?.['Work Order'] ?? sourceRow?.WorkOrder ?? sourceRow?.['Work Order Number'];
+                return workOrder === null || workOrder === undefined || workOrder === '' ? '-' : workOrder;
+            };
+
             const stationPriority = {};
             stations.forEach(station => {
                 stationPriority[station] = 1;
@@ -832,14 +845,15 @@
 
             const addSimulatedUnit = (station, status) => {
                 const isCompletedStatus = status === 'Completed' || status === 'QC Wait';
+                const itemName = getSimulatedItemName();
                 rows.push({
                     Workstation: station,
                     'Workstation Priority': stationPriority[station]++,
                     'Planned Start Date': today,
                     'Planned Finish Date': today,
                     'Date completed': isCompletedStatus ? today : null,
-                    'Work Order': `${workOrder++}`,
-                    Item: getSimulatedItemName(),
+                    'Work Order': getSimulatedWorkOrder(itemName),
+                    Item: itemName,
                     Status: status
                 });
             };
@@ -848,8 +862,6 @@
                 addSimulatedUnit(station, 'WIP');
                 addSimulatedUnit(station, 'Not Started');
                 addSimulatedUnit(station, index % 2 === 0 ? 'Completed' : 'QC Wait');
-                addSimulatedUnit(station, 'Not Started');
-                addSimulatedUnit(station, index % 2 === 0 ? 'QC Wait' : 'Completed');
             });
 
             const groupedByStation = {};
@@ -930,6 +942,13 @@
                     const stationItems = stationDataSource[station].filter(r => {
                         const status = normalizeStatus(r);
                         return isScheduledForWipWindow(r, today) && !isCompletedStatus(status);
+                    }).sort((left, right) => {
+                        if (simulationMode) {
+                            const leftNotStarted = isNotStartedStatus(normalizeStatus(left));
+                            const rightNotStarted = isNotStartedStatus(normalizeStatus(right));
+                            if (leftNotStarted !== rightNotStarted) return leftNotStarted ? 1 : -1;
+                        }
+                        return Number(getPriority(left)) - Number(getPriority(right));
                     });
 
                     if (stationItems.length === 0) return '';
@@ -945,7 +964,7 @@
                         <div class="card station-card p-2 rounded-lg hover:shadow-xl transition-all border-l-4 ${inProgressCardClass}" style="border-left-color: ${stationColor};">
                             <div class="station-card-top flex justify-between items-start mb-2">
                                 <div class="flex-1">
-                                    <h5 class="text-xl font-black text-light mb-0.5 leading-tight">${r['Item'] || '-'}</h5>
+                                    <h5 class="station-item-code font-black text-light mb-0.5">${r['Item'] || '-'}</h5>
                                     <p class="text-sm text-secondary font-bold font-mono">WO: ${r['Work Order'] || '-'}</p>
                                 </div>
                                 <span class="status-badge bg-blue-500 text-white">
@@ -1012,7 +1031,7 @@
                             <div class="card station-card p-2 rounded-lg hover:shadow-xl transition-all border-l-4 border-emerald-600">
                                 <div class="station-card-top flex justify-between items-start mb-2">
                                     <div class="flex-1">
-                                        <h5 class="text-xl font-black text-light mb-0.5 leading-tight">${r['Item'] || '-'}</h5>
+                                        <h5 class="station-item-code font-black text-light mb-0.5">${r['Item'] || '-'}</h5>
                                         <p class="text-sm text-secondary font-bold font-mono">WO: ${r['Work Order'] || '-'}</p>
                                     </div>
                                     <span class="status-badge ${isQCWait ? 'bg-yellow-500' : 'bg-emerald-600'} text-white">

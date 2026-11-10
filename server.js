@@ -7,6 +7,7 @@ const chokidar = require('chokidar');
 const ExcelJS = require('exceljs');
 const dayjs = require('dayjs');
 const customParseFormat = require('dayjs/plugin/customParseFormat');
+const { normalizeCellValue, hasMeaningfulRow } = require('./excelData');
 
 dayjs.extend(customParseFormat);
 
@@ -30,35 +31,36 @@ let lastKnownFileSignature = null;
 
 function resolveWorksheet(workbook) {
     const currentMonthName = dayjs().format('MMMM-YYYY');
-    const directMatch = workbook.getWorksheet(currentMonthName);
+    const currentMonth = dayjs(currentMonthName, 'MMMM-YYYY', true);
+    const monthNamedSheets = workbook.worksheets
+        .map((worksheet) => {
+            const parsedMonth = dayjs(worksheet.name, ['MMMM-YYYY', 'MMMM YYYY'], true);
+            if (!parsedMonth.isValid()) {
+                return null;
+            }
 
-    if (directMatch) {
+            return { worksheet, parsedMonth };
+        })
+        .filter(Boolean)
+        .sort((left, right) => left.parsedMonth.valueOf() - right.parsedMonth.valueOf());
+    const currentMonthSheet = monthNamedSheets.find(({ parsedMonth }) =>
+        parsedMonth.isSame(currentMonth, 'month')
+    );
+
+    if (currentMonthSheet) {
         return {
-            monthLabel: currentMonthName,
-            worksheet: directMatch,
+            monthLabel: currentMonth.format('MMMM-YYYY'),
+            worksheet: currentMonthSheet.worksheet,
             resolution: 'exact-current-month'
         };
     }
 
-    const monthNamedSheets = workbook.worksheets
-        .map((worksheet) => {
-            const parsed = dayjs(worksheet.name, 'MMMM-YYYY', true);
-            if (!parsed.isValid()) {
-                return null;
-            }
-
-            return {
-                worksheet,
-                parsedMonth: parsed
-            };
-        })
-        .filter(Boolean)
-        .sort((left, right) => left.parsedMonth.valueOf() - right.parsedMonth.valueOf());
-
     if (monthNamedSheets.length > 0) {
-        const latestMonthSheet = monthNamedSheets[monthNamedSheets.length - 1];
+        const latestMonthSheet = [...monthNamedSheets]
+            .filter(({ parsedMonth }) => parsedMonth.isBefore(currentMonth, 'month'))
+            .pop() || monthNamedSheets[monthNamedSheets.length - 1];
         return {
-            monthLabel: latestMonthSheet.worksheet.name,
+            monthLabel: latestMonthSheet.parsedMonth.format('MMMM-YYYY'),
             worksheet: latestMonthSheet.worksheet,
             resolution: 'latest-month-sheet'
         };
@@ -175,35 +177,19 @@ async function parseExcel(forceRefresh = false) {
             const rowData = {};
             row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
                 const header = headers[colNumber - 1];
-                if (header) {
-                    let val = cell.value;
-                    
-                    // Handle Excel Date Objects to prevent Timezone/0-result bugs
-                    if (val instanceof Date || (val && val.constructor.name === 'Date')) {
-                        val = dayjs(val).format('YYYY-MM-DD');
-                    } else if (val && typeof val === 'object' && val.result) {
-                        // Handle formula results
-                        val = val.result instanceof Date ? dayjs(val.result).format('YYYY-MM-DD') : val.result;
-                    } else if (val && typeof val === 'object') {
-                        // Handle rich text format from Excel
-                        if (val.richText && Array.isArray(val.richText)) {
-                            val = val.richText.map(rt => rt.text).join('');
-                        } else if (val.text !== undefined) {
-                            val = val.text;
-                        } else if (val.toString && val.toString() !== '[object Object]') {
-                            val = val.toString();
-                        } else {
-                            val = '';
-                        }
-                    }
-                    rowData[header] = val;
+                if (!header) {
+                    return;
                 }
+
+                const value = normalizeCellValue(cell.value);
+                rowData[header] = value;
             });
 
-            // Filter out empty rows
-            if (rowData['Item'] || rowData['Work Order']) {
-                data.push(rowData);
+            if (!hasMeaningfulRow(rowData)) {
+                return;
             }
+
+            data.push(rowData);
         });
 
 
